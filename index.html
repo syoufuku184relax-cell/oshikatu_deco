@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>推し活デコカメラ - Step 2</title>
+  <title>推し活デコカメラ - Step 2 (修正版)</title>
   <style>
     * {
       box-sizing: border-box;
@@ -21,6 +21,7 @@
       background-color: #000;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       color: #fff;
+      touch-action: none; /* ブラウザ全体の無用なズーム・スクロールを防止 */
     }
 
     .screen {
@@ -44,20 +45,37 @@
     /* --- 1. 撮影画面 --- */
     #screen-camera {
       position: relative;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
-    /* カメラ映像を全画面に配置 */
+    /* カメラプレビューコンテナ（全画面に白枠を配置） */
+    .camera-viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    /* カメラ映像：containに変更し、撮影エリアを厳密に一致させる */
     #camera-stream {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      background: #000;
+      transform-origin: center center;
     }
 
     .camera-mirrored {
       transform: scaleX(-1);
     }
 
-    /* チェキ風フレーム（撮影中も画角確認用にリアルタイム表示） */
+    /* チェキ風オーバーレイフレーム（下部余白を半分程度に縮小：70px） */
     .cheki-frame-overlay {
       position: absolute;
       top: 0;
@@ -65,24 +83,23 @@
       width: 100%;
       height: 100%;
       pointer-events: none;
-      /* 左右: 12px, 上: 28px, 下: 140px の白枠エリア */
       border-style: solid;
       border-color: #ffffff;
-      border-top-width: 28px;
+      border-top-width: 24px;
       border-left-width: 12px;
       border-right-width: 12px;
-      border-bottom-width: 140px;
-      box-shadow: inset 0 0 10px rgba(0,0,0,0.3);
+      border-bottom-width: 75px; /* 下部余白を現状の半分程度に変更 */
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.3);
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
       align-items: center;
-      padding-bottom: 20px;
+      padding-bottom: 15px;
       z-index: 5;
     }
 
     .cheki-frame-overlay .frame-label {
-      color: #999;
+      color: #aaa;
       font-size: 0.75rem;
       font-weight: bold;
       letter-spacing: 2px;
@@ -97,7 +114,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 36px 16px 12px 16px;
+      padding: 30px 16px 12px 16px;
       z-index: 10;
     }
 
@@ -120,20 +137,19 @@
 
     .controls-bottom {
       position: absolute;
-      bottom: 20px;
+      bottom: 12px;
       left: 0;
       width: 100%;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       z-index: 10;
     }
 
-    /* シャッターボタン */
     .shutter-btn {
-      width: 76px;
-      height: 76px;
+      width: 68px;
+      height: 68px;
       border-radius: 50%;
       background: #fff;
       border: 5px solid #ff3366;
@@ -145,13 +161,12 @@
       transform: scale(0.92);
     }
 
-    /* ズームスライダー UI */
     .zoom-container {
       display: flex;
       align-items: center;
       gap: 10px;
       background: rgba(0, 0, 0, 0.6);
-      padding: 6px 16px;
+      padding: 4px 14px;
       border-radius: 20px;
       backdrop-filter: blur(4px);
       font-size: 0.8rem;
@@ -167,7 +182,7 @@
       background: #111;
       justify-content: space-between;
       align-items: center;
-      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
 
     .preview-wrapper {
@@ -176,7 +191,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 10px;
+      padding: 8px;
       overflow: hidden;
     }
 
@@ -198,7 +213,7 @@
 
     .action-btn {
       flex: 1;
-      padding: 14px;
+      padding: 12px;
       border: none;
       border-radius: 28px;
       font-size: 0.95rem;
@@ -214,21 +229,23 @@
 
   <!-- 1. 撮影画面 -->
   <div id="screen-camera" class="screen active">
-    <!-- カメラ映像 -->
-    <video id="camera-stream" autoplay playsinline muted></video>
+    <div class="camera-viewport" id="viewport">
+      <!-- カメラ映像 -->
+      <video id="camera-stream" autoplay playsinline muted></video>
 
-    <!-- チェキ風リアルタイム枠 -->
-    <div class="cheki-frame-overlay">
-      <div class="frame-label">推し活デコカメラ</div>
+      <!-- チェキ風フレーム（下余白縮小版） -->
+      <div class="cheki-frame-overlay">
+        <div class="frame-label">推し活デコカメラ</div>
+      </div>
     </div>
 
-    <!-- 上部コントロール -->
+    <!-- 上部ボタン -->
     <div class="controls-top">
       <button id="btn-switch" class="icon-btn">🔄 切替 (イン)</button>
       <button id="btn-flash" class="icon-btn">⚡ ライト OFF</button>
     </div>
 
-    <!-- 下部コントロール -->
+    <!-- 下部ボタン・スライダー -->
     <div class="controls-bottom">
       <div class="zoom-container">
         <span>🔍 ズーム</span>
@@ -239,7 +256,7 @@
     </div>
   </div>
 
-  <!-- 2. 撮影結果確認プレビュー画面 (全画面チェキ枠付き) -->
+  <!-- 2. プレビュー確認画面 -->
   <div id="screen-preview" class="screen">
     <div class="preview-wrapper">
       <img id="preview-img" alt="撮影プレビュー">
@@ -254,6 +271,7 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const video = document.getElementById('camera-stream');
+      const viewport = document.getElementById('viewport');
       const btnSwitch = document.getElementById('btn-switch');
       const btnFlash = document.getElementById('btn-flash');
       const btnShutter = document.getElementById('btn-shutter');
@@ -273,21 +291,18 @@
       let zoomCapabilities = null;
       let capturedFrameData = null;
 
-      // ピンチズーム計算用
-      let pinchStartDistance = 0;
-      let pinchStartZoom = 1.0;
+      // ピンチジェスチャー用変数
+      let initialPinchDistance = null;
+      let initialZoom = 1.0;
 
-      // --- カメラ起動 ---
       async function startCamera() {
         if (currentStream) {
           currentStream.getTracks().forEach(track => track.stop());
         }
 
-        // 9:16比率と広角を意識したカメラ制約設定
         const constraints = {
           video: {
             facingMode: useFrontCamera ? 'user' : 'environment',
-            aspectRatio: { ideal: 0.5625 }, // 9:16
             width: { ideal: 1080 },
             height: { ideal: 1920 }
           },
@@ -297,23 +312,24 @@
         try {
           currentStream = await navigator.mediaDevices.getUserMedia(constraints);
           video.srcObject = currentStream;
-          await video.play().catch(e => console.log('Auto-play error:', e));
+          await video.play().catch(e => console.log('Auto-play handling:', e));
 
           const track = currentStream.getVideoTracks()[0];
           zoomCapabilities = track.getCapabilities ? track.getCapabilities().zoom : null;
 
-          // ズーム可能端末の場合スライダーの最大値を調整
           if (zoomCapabilities) {
             zoomRange.min = zoomCapabilities.min || 1;
-            zoomRange.max = Math.min(zoomCapabilities.max || 3, 5);
+            zoomRange.max = Math.min(zoomCapabilities.max || 4, 5);
             zoomRange.step = zoomCapabilities.step || 0.1;
+          } else {
+            zoomRange.min = 1;
+            zoomRange.max = 3;
+            zoomRange.step = 0.1;
           }
 
           if (useFrontCamera) {
-            video.classList.add('camera-mirrored');
             btnSwitch.textContent = '🔄 切替 (イン)';
           } else {
-            video.classList.remove('camera-mirrored');
             btnSwitch.textContent = '🔄 切替 (アウト)';
           }
 
@@ -323,53 +339,62 @@
 
         } catch (err) {
           console.error('カメラ起動エラー:', err);
-          alert('カメラ起動に失敗しました: ' + err.message);
+          alert('カメラ起動失敗: ' + err.message);
         }
       }
 
-      // --- ズーム制御 ---
+      // ズーム適応処理 (ハードウェア ＋ CSSフォールバック)
       async function applyZoom(zoomValue) {
-        currentZoom = Math.max(1.0, Math.min(zoomValue, zoomRange.max));
+        currentZoom = Math.max(parseFloat(zoomRange.min), Math.min(zoomValue, parseFloat(zoomRange.max)));
         zoomRange.value = currentZoom;
         zoomVal.textContent = `${currentZoom.toFixed(1)}x`;
 
         if (!currentStream) return;
         const track = currentStream.getVideoTracks()[0];
 
-        // ハードウェアズーム対応端末の場合
+        // ハードウェアズーム試行
         if (zoomCapabilities && track.applyConstraints) {
           try {
             await track.applyConstraints({ advanced: [{ zoom: currentZoom }] });
+            video.style.transform = useFrontCamera ? 'scaleX(-1)' : 'none';
             return;
           } catch (e) {
-            console.log('Hardware zoom fallback to CSS');
+            console.log('Hardware zoom failed, using CSS scale');
           }
         }
 
-        // デジタルズームフォールバック (CSS transform)
-        const mirrorScale = useFrontCamera ? -1 : 1;
-        video.style.transform = `scale(${currentZoom}) scaleX(${mirrorScale})`;
+        // CSSズーム処理（反転と拡大を確実に同時適用）
+        const mirror = useFrontCamera ? '-1' : '1';
+        video.style.transform = `scale(${currentZoom}) scaleX(${mirror})`;
       }
 
-      // --- ピンチ操作イベント処理 ---
-      screenCamera.addEventListener('touchstart', (e) => {
+      // タッチ操作によるピンチズーム処理
+      viewport.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
-          pinchStartDistance = Math.hypot(
+          e.preventDefault();
+          initialPinchDistance = Math.hypot(
             e.touches[0].clientX - e.touches[1].clientX,
             e.touches[0].clientY - e.touches[1].clientY
           );
-          pinchStartZoom = currentZoom;
+          initialZoom = currentZoom;
         }
-      });
+      }, { passive: false });
 
-      screenCamera.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 2 && pinchStartDistance > 0) {
+      viewport.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && initialPinchDistance) {
+          e.preventDefault();
           const currentDistance = Math.hypot(
             e.touches[0].clientX - e.touches[1].clientX,
             e.touches[0].clientY - e.touches[1].clientY
           );
-          const scale = currentDistance / pinchStartDistance;
-          applyZoom(pinchStartZoom * scale);
+          const factor = currentDistance / initialPinchDistance;
+          applyZoom(initialZoom * factor);
+        }
+      }, { passive: false });
+
+      viewport.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) {
+          initialPinchDistance = null;
         }
       });
 
@@ -377,10 +402,9 @@
         applyZoom(parseFloat(e.target.value));
       });
 
-      // --- ライト切替 ---
       async function toggleFlash() {
         if (useFrontCamera) {
-          alert('ライト機能はアウトカメラのみ利用可能です。');
+          alert('ライト機能はアウトカメラでのみ動作します。');
           return;
         }
         if (!currentStream) return;
@@ -388,7 +412,7 @@
         const caps = track.getCapabilities ? track.getCapabilities() : {};
 
         if (!caps.torch) {
-          alert('お使いの端末はライト点灯に対応していません。');
+          alert('お使いの端末はライト制御に対応していません。');
           return;
         }
 
@@ -397,7 +421,7 @@
           await track.applyConstraints({ advanced: [{ torch: isFlashOn }] });
           updateFlashUI();
         } catch (e) {
-          alert('ライト切替失敗: ' + e.message);
+          alert('ライト切り替えエラー: ' + e.message);
         }
       }
 
@@ -406,24 +430,24 @@
         btnFlash.classList.toggle('active', isFlashOn);
       }
 
-      // --- 撮影 ＆ 9:16チェキフレーム合成機能 ---
+      // 撮影＆チェキ合成（見た目の表示エリアと100%一致させてトリミング）
       function captureChekiPhoto() {
         const canvas = document.createElement('canvas');
         canvas.width = 1080;
         canvas.height = 1920;
         const ctx = canvas.getContext('2d');
 
-        // 1. 全体フレーム（白背景）
+        // 白フレーム背景
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, 1080, 1920);
 
-        // 2. 写真配置エリア計算（左右幅: 36px, 上部幅: 80px, 写真領域: 1008x1344 3:4比率）
+        // 写真エリア計算（下余白縮小に対応）
         const photoX = 36;
-        const photoY = 80;
+        const photoY = 70;
         const photoW = 1008;
-        const photoH = 1344;
+        const photoH = 1550; // 下余白を小さくし写真サイズを拡大
 
-        // 仮想キャンバスへビデオを描画
+        // Videoの画角そのまま切り出し
         const vCanvas = document.createElement('canvas');
         vCanvas.width = video.videoWidth || 1080;
         vCanvas.height = video.videoHeight || 1920;
@@ -435,24 +459,22 @@
         }
         vCtx.drawImage(video, 0, 0, vCanvas.width, vCanvas.height);
 
-        // クロップ描画 (中央クロップ)
+        // プレビュー表示範囲と100%同じ構図でクロップ合成
         ctx.drawImage(vCanvas, 0, 0, vCanvas.width, vCanvas.height, photoX, photoY, photoW, photoH);
 
-        // 3. 下部テキスト（飾りロゴ）
+        // 下部ロゴテキスト
         ctx.fillStyle = '#AAAAAA';
-        ctx.font = 'bold 32px sans-serif';
+        ctx.font = 'bold 28px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('推し活デコカメラ', 1080 / 2, 1750);
+        ctx.fillText('推し活デコカメラ', 1080 / 2, 1820);
 
         capturedFrameData = canvas.toDataURL('image/png');
         previewImg.src = capturedFrameData;
 
-        // 画面切り替え
         screenCamera.classList.remove('active');
         screenPreview.classList.add('active');
       }
 
-      // --- イベントバインド ---
       btnSwitch.addEventListener('click', () => {
         useFrontCamera = !useFrontCamera;
         startCamera();
@@ -461,13 +483,11 @@
       btnFlash.addEventListener('click', toggleFlash);
       btnShutter.addEventListener('click', captureChekiPhoto);
 
-      // 撮り直しボタン
       btnRetake.addEventListener('click', () => {
         screenPreview.classList.remove('active');
         screenCamera.classList.add('active');
       });
 
-      // 未デコ保存ボタン
       btnSaveRaw.addEventListener('click', () => {
         if (capturedFrameData) {
           const album = JSON.parse(localStorage.getItem('cheki_album') || '[]');
@@ -478,13 +498,12 @@
             date: new Date().toLocaleString()
           });
           localStorage.setItem('cheki_album', JSON.stringify(album));
-          alert('撮影データ（未デコ）をアルバムに保存しました！');
+          alert('撮影データ（未デコ）を保存しました！');
         }
         screenPreview.classList.remove('active');
         screenCamera.classList.add('active');
       });
 
-      // 初回起動
       startCamera();
     });
   </script>
