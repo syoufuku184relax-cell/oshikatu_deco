@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>推し活デコカメラ - Step 1</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      background-color: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+    }
+
+    /* 画面全体をカメラエリアにする */
+    .camera-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      background: #111;
+    }
+
+    /* 全画面ビデオ表示 */
+    #camera-stream {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* インカメラの左右反転 */
+    .camera-mirrored {
+      transform: scaleX(-1);
+    }
+
+    /* 上部コントロールUI */
+    .controls-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      padding-top: calc(16px + env(safe-area-inset-top));
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent);
+      z-index: 10;
+    }
+
+    /* アイコンボタン */
+    .icon-btn {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      backdrop-filter: blur(4px);
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .icon-btn:active {
+      opacity: 0.8;
+    }
+
+    .icon-btn.active {
+      background: rgba(255, 51, 102, 0.8);
+      border-color: #ff3366;
+    }
+
+    /* 下部メッセージ・ステータス */
+    .status-overlay {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.6);
+      padding: 8px 16px;
+      border-radius: 16px;
+      font-size: 0.8rem;
+      color: #ccc;
+      pointer-events: none;
+      z-index: 10;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="camera-container">
+    <!-- カメラ映像表示エリア (全画面) -->
+    <video id="camera-stream" autoplay playsinline muted></video>
+
+    <!-- 上部操作ボタン -->
+    <div class="controls-top">
+      <button id="btn-switch" class="icon-btn">🔄 カメラ切替 (イン)</button>
+      <button id="btn-flash" class="icon-btn">⚡ ライト OFF</button>
+    </div>
+
+    <!-- ステータス表示 -->
+    <div id="status-msg" class="status-overlay">カメラ起動中...</div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const video = document.getElementById('camera-stream');
+      const btnSwitch = document.getElementById('btn-switch');
+      const btnFlash = document.getElementById('btn-flash');
+      const statusMsg = document.getElementById('status-msg');
+
+      let currentStream = null;
+      let useFrontCamera = true;
+      let isFlashOn = false;
+
+      // カメラ起動関数
+      async function startCamera() {
+        // 既存ストリームの停止処理
+        if (currentStream) {
+          currentStream.getTracks().forEach(track => track.stop());
+        }
+
+        // カメラ設定 (イン / アウト)
+        const constraints = {
+          video: {
+            facingMode: useFrontCamera ? 'user' : 'environment',
+            width: { ideal: 1080 },
+            height: { ideal: 1920 }
+          },
+          audio: false
+        };
+
+        try {
+          currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+          video.srcObject = currentStream;
+          await video.play().catch(e => console.log('Auto-play play():', e));
+
+          // インカメラ時の左右反転表示
+          if (useFrontCamera) {
+            video.classList.add('camera-mirrored');
+            btnSwitch.textContent = '🔄 カメラ切替 (イン)';
+          } else {
+            video.classList.remove('camera-mirrored');
+            btnSwitch.textContent = '🔄 カメラ切替 (アウト)';
+          }
+
+          // フラッシュ状態をリセット
+          isFlashOn = false;
+          updateFlashButtonUI();
+          statusMsg.textContent = useFrontCamera ? 'インカメラ起動中' : 'アウトカメラ起動中';
+
+        } catch (err) {
+          console.error('カメラ起動エラー:', err);
+          statusMsg.textContent = 'エラー: ' + err.message;
+          alert('カメラの起動に失敗しました。ブラウザのカメラ許可を確認してください。');
+        }
+      }
+
+      // フラッシュ (トーチ) 点灯切替処理
+      async function toggleFlash() {
+        if (useFrontCamera) {
+          alert('フラッシュ機能はアウトカメラ使用時のみ利用できます。');
+          return;
+        }
+
+        if (!currentStream) return;
+
+        const videoTrack = currentStream.getVideoTracks()[0];
+        if (!videoTrack) return;
+
+        // 端末がトーチ(ライト)に対応しているかチェック
+        const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+
+        if (!capabilities.torch) {
+          alert('お使いの端末・ブラウザはライト点灯に対応していません。');
+          return;
+        }
+
+        try {
+          isFlashOn = !isFlashOn;
+          await videoTrack.applyConstraints({
+            advanced: [{ torch: isFlashOn }]
+          });
+          updateFlashButtonUI();
+        } catch (err) {
+          console.error('フラッシュ設定エラー:', err);
+          alert('ライトの制御に失敗しました: ' + err.message);
+        }
+      }
+
+      // フラッシュボタンの表示更新
+      function updateFlashButtonUI() {
+        if (isFlashOn) {
+          btnFlash.classList.add('active');
+          btnFlash.textContent = '⚡ ライト ON';
+        } else {
+          btnFlash.classList.remove('active');
+          btnFlash.textContent = '⚡ ライト OFF';
+        }
+      }
+
+      // --- イベント登録 ---
+
+      // カメラ切り替えボタン
+      btnSwitch.addEventListener('click', () => {
+        useFrontCamera = !useFrontCamera;
+        startCamera();
+      });
+
+      // フラッシュ切替ボタン
+      btnFlash.addEventListener('click', () => {
+        toggleFlash();
+      });
+
+      // 初回起動
+      startCamera();
+    });
+  </script>
+</body>
+</html>
